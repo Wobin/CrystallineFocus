@@ -9,37 +9,37 @@ local tag_colour = "crystalline_focus"
 
 local get_outline_system = function()
     local state_extension = manager_state.extension
-    if not outline_system then
-        outline_system = state_extension and state_extension:system("outline_system")
-    end
-    return outline_system
+    return state_extension and state_extension:system("outline_system")
 end
 
 mod.remove_outline = function(unit)
         outline_system:remove_outline(unit, tag_colour, true)
-        outlined_units[unit] = nil
+        outlined_units[unit] = nil   
 end
 
 mod.remove_all_outlines = function()
     for unit,_ in pairs(outlined_units) do
         mod.remove_outline(unit)
-    end
+    end    
+    outlined_units = {}
 end
 
+
 mod:hook_require("scripts/settings/outline/outline_settings", function(settings)    
-     settings.MinionOutlineExtension.crystalline_focus = {
+    settings.MinionOutlineExtension.crystalline_focus = {
         priority = 3,
         color = {0,1,0.5},
         material_layers = {
             "minion_outline",
-			"minion_outline_reversed_depth",       
+            "minion_outline_reversed_depth",       
         },
-        visibility_check = function() return mod.at_peril_threshold end
-    }
+        visibility_check = function() return true end
+    }    
 end)
+   
 
 mod.manage_outlines = function(enemies)
-        outline_system = outline_system or get_outline_system()        
+        outline_system = get_outline_system()        
         if not outline_system then return end
         for unit, _ in pairs(outlined_units) do
 

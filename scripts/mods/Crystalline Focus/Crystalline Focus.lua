@@ -15,12 +15,14 @@ local game_mode_manager = Managers.state.game_mode
 local has_extension = ScriptUnit.has_extension
 local HEALTH_ALIVE = HEALTH_ALIVE
 
-local mt = get_mod("modding_tools")
-
 mod.radius = 12.5
-mod.version = "1.0.0"
+mod.version = "1.2.1"
 
-local retrieve_profile = function()    
+mod:io_dofile("Crystalline Focus/scripts/mods/Crystalline Focus/modules/Outlines")
+mod:io_dofile("Crystalline Focus/scripts/mods/Crystalline Focus/modules/Zone")
+
+
+local retrieve_profile = function()        
     local localplayer = playerManager:local_player_safe(1) or nil
     if not localplayer then return end
     local profile = localplayer:profile()
@@ -36,7 +38,6 @@ acceptable_locations["survival"] = true
 acceptable_locations["shooting_range"] = true
 
 mod.player = nil
-mod.at_peril_threshold = true
 
 mod.on_all_mods_loaded = function()    
     mod:info(mod.version)
@@ -47,23 +48,35 @@ mod.on_unload = function(exit_game)
     if mod.remove_all_outlines then
         mod.remove_all_outlines()    
     end
+    if mod.remove_zone then
+        mod.remove_zone()
+    end
+    mod.initialised = false
+    mod.player = nil    
 end
 
 mod.on_game_state_changed = function(status, sub_state_name)
-	if sub_state_name == "GameplayStateRun" and status == "enter" then
+	if sub_state_name == "GameplayStateRun" and status == "enter" then                
         mod:init()
     end
-    if status == "exit" then mod.on_unload() end
+    if sub_state_name == "StateLoading" and status == "exit" then
+        mod.on_unload()
+    end
 end
 
 mod.init = function()    
      game_mode_manager = Managers.state.game_mode			
     if game_mode_manager then        
-	    if acceptable_locations[game_mode_manager:game_mode_name()] then
-            delay(3):next(retrieve_profile):next(mod.init_zone)
-        end
+	    if acceptable_locations[game_mode_manager:game_mode_name()] then            
+            delay(3):next(retrieve_profile):next(mod.init_zone):next(function() mod.initialised = true end)
+        end    
     end
+
 end
+
+mod:hook_safe(CLASS.InventoryBackgroundView, "on_exit", function()
+    delay(3):next(mod.remove_all_outlines):next(mod.remove_zone):next(retrieve_profile)
+end)
 
 
 local function find_enemies_in_radius(center, radius)
@@ -83,7 +96,6 @@ local function find_enemies_in_radius(center, radius)
                 local current_health = has_extension(unit, "health_system"):current_health()                
                 local reduced_damage = 1200 * (1 - ((distance / 12.5) * (distance / 12.5)))                 
                 if current_health <= reduced_damage then 
-                    mod:echo(current_health .. ":" .. reduced_damage)
                     table_insert(enemy_units, unit)
                 end
             end
@@ -92,29 +104,32 @@ local function find_enemies_in_radius(center, radius)
     return enemy_units
 end
 
-mod:io_dofile("Crystalline Focus/scripts/mods/Crystalline Focus/modules/Outlines")
-mod:io_dofile("Crystalline Focus/scripts/mods/Crystalline Focus/modules/Zone")
-
 local manage_outlines = mod.manage_outlines
 local delta = 0
 
 mod.update = function(dt)    
+    if not mod.initialised then return end    
     if delta > 0.3 then
-        if mod.player and 
-            mod.at_peril_threshold then
-            if  Unit.is_valid(mod.player.player_unit) then        
-                local my_position = unitLocalPosition(mod.player.player_unit, 1)        
-                local enemies = find_enemies_in_radius(my_position, mod.radius)                     
+        if mod.player and Unit.is_valid(mod.player.player_unit) then            
+            local extensions =  has_extension(mod.player.player_unit, "unit_data_system")	        
+            local warp_charge_component = extensions and extensions:read_component("warp_charge")
+            local warp_charge_level = warp_charge_component and warp_charge_component.current_percentage or 0
+            if warp_charge_level >= (mod:get("peril_threshold")/100) then
+                mod.at_peril_threshold = true                
+                local enemies = find_enemies_in_radius(unitLocalPosition(mod.player.player_unit, 1), mod.radius)                     
                 manage_outlines(enemies)
                 if #enemies > 0 and mod:get("add_ring") then
                     mod.manage_zone()
                 else
                     mod.remove_zone()
                 end
+            else
+                mod.at_peril_threshold = false
             end
         end
         delta = 0
     else
-        delta = delta + dt
-    end
-end 
+        delta = delta + dt    
+    end      
+end
+

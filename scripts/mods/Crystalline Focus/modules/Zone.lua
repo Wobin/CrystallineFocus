@@ -8,6 +8,7 @@ local Unit = Unit
 local World = World
 local Vector3 = Vector3
 local Quaternion = Quaternion
+local is_valid = Unit.is_valid
 
 mod.init_zone = function(has_loaded)
     if not package:has_loaded(package_path) and not has_loaded then
@@ -49,7 +50,7 @@ mod.manage_zone = function()
 end
 
 mod.remove_zone = function()    
-   if mod.decal then
+   if mod.decal and is_valid(mod.decal) then
         World.destroy_unit(Unit.world(mod.decal), mod.decal)                 
         mod.decal = nil
     end
